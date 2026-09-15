@@ -3,22 +3,23 @@
 import os
 from typing import Any, Dict, Optional
 from openai import OpenAI
-from configs.config import MODEL_PROVIDER
+# pyrefly: ignore [missing-import]
+from configs.config import MODEL_PROVIDER , MODEL_API_KEY
 from PIL import Image
 import torch
+import base64
 class QwenClient:
     """Client for interacting with Qwen VL models."""
 
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "qwen-vl-max"):
-        self.api_key = api_key or os.getenv("QWEN_API_KEY")
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "Qwen/Qwen3-VL-8B-Instruct:featherless-ai"):
+        self.api_key = api_key or MODEL_API_KEY
         self.model_name = model_name
-        if MODEL_PROVIDER ==  "openrouter":
+        if MODEL_PROVIDER == "openrouter":
             self.client = OpenAI(
-                base_url="https://openrouter.ai/api/v1",
+                base_url="https://router.huggingface.co/v1",
                 api_key=self.api_key,
             )
         else : #Transformer qwen 8 model 
-    
             from transformers import AutoProcessor, AutoModelForVision2Seq
             self.processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-8B-Instruct")
             self.client =  AutoModelForVision2Seq.from_pretrained("Qwen/Qwen2.5-VL-8B-Instruct")
@@ -88,19 +89,35 @@ class QwenClient:
 
         return response[0].strip()
 
-    def _invoke_openroute(self , prompt , image_path):
+
+
+    def _invoke_openroute(self, prompt, image_path):
+        with open(image_path, "rb") as f:
+            b64_image = base64.b64encode(f.read()).decode("utf-8")
+
+        ext = image_path.rsplit(".", 1)[-1].lower()
+        mime = "jpeg" if ext in ("jpg", "jpeg") else ext  # png, webp, etc.
 
         response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "user", "content": prompt, "images": [image_path]},
-                ],
-                max_tokens=1024,
-                temperature=0,
-            )
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/{mime};base64,{b64_image}"
+                            },
+                        },
+                    ],
+                }
+            ],
+            max_tokens=1024,
+            temperature=0,
+        )
         return response.choices[0].message.content
-
-
     def invoke(self , prompt , image_path ):
         if MODEL_PROVIDER ==  "openrouter":
            return self._invoke_openroute(prompt , image_path)
@@ -112,3 +129,13 @@ class QwenClient:
     def generate(self, prompt: str, image_path: Optional[str] = None) -> Dict[str, Any]:
         """Send prompt and optional image to Qwen model and return response."""
         raise NotImplementedError("Implement Qwen API call here.")
+
+
+
+
+# -----------------------------------------
+
+if __name__ == "__main__":
+    qwen_client = QwenClient()
+    result = qwen_client.invoke("Hello","test.jpeg")
+    print(result)
