@@ -21,7 +21,7 @@ class PODExtractionResult(BaseModel):
     None,
     description="Remarks present in the POD"
     )
-    remark: Literal["SHORT", "DAMAGE"] | None = Field(None, description="Remarks present in the POD")
+    remark: Literal["SHORT", "DAMAGE" , "DAMAGE_SHORT"] | None = Field(None, description="Remarks present in the POD")
     delivery_date: Optional[str] = Field(
     None,
     description="Delivery date of the POD in YYYY-MM-DD format"
@@ -30,7 +30,7 @@ class PODExtractionResult(BaseModel):
 
     business_damage : bool = Field(False , description = "whether business damage is present")  
 
-    shortage : bool = Field(False , description = "whether shortage is present")  
+    business_shortage : bool = Field(False , description = "whether shortage is present")  
     
     
     
