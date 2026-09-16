@@ -23,9 +23,9 @@ class QwenClient:
             self.client = InferenceClient(api_key=self.api_key)
 
         elif MODEL_PROVIDER == "transformers":
-            from transformers import AutoProcessor, AutoModelForVision2Seq
+            from transformers import AutoProcessor, AutoModelForImageTextToText
             self.processor = AutoProcessor.from_pretrained(self.model_name)
-            self.client = AutoModelForVision2Seq.from_pretrained(self.model_name)
+            self.client = AutoModelForImageTextToText.from_pretrained(self.model_name)
 
         else:
             raise ValueError(f"Unknown MODEL_PROVIDER: {MODEL_PROVIDER}")
