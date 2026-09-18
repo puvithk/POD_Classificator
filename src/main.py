@@ -1,19 +1,13 @@
-"""Main entry point for POD classification pipeline."""
-
-import argparse
-from src.utils.logger import setup_logger
-
-logger = setup_logger(__name__)
+import sys
+import json
+from src.pipeline.pipeline import PODClassificationPipeline
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run POD Classification Pipeline")
-    parser.add_argument("--config", default="configs/config.yaml", help="Path to config file")
-    parser.add_argument("--input", default="data/sample", help="Path to input document/images")
-    args = parser.parse_args()
-
-    logger.info("Starting POD Classification Pipeline...")
-    logger.info("Config: %s | Input: %s", args.config, args.input)
+    img = sys.argv[1] if len(sys.argv) > 1 else "test.jpg"
+    prompt = sys.argv[2] if len(sys.argv) > 2 else "prompts/pod_extraction_prompt.txt"
+    report = PODClassificationPipeline().run(img, prompt)
+    print(json.dumps(report, indent=2, default=str))
 
 
 if __name__ == "__main__":

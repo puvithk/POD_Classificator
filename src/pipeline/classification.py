@@ -16,7 +16,6 @@ class PODClassification:
         else:
             info_dict = extracted_info
 
-        default_score = 0.0
         current_info: Dict[str, Any] = {
             "cnNumber": info_dict.get("cn_number", None),
             "hasSignature": info_dict.get("has_signature", False),
@@ -26,7 +25,7 @@ class PODClassification:
             "remarksText": info_dict.get("remarks_text", None),
             "deliveryDate": info_dict.get("delivery_date", None),
             "categoryReason": None,
-            "categoryScore": default_score,
+            "categoryScore": 0.0,
             "podCategory": "NOT_APPLICABLE",
             "limit_exceed": False,
         }
@@ -35,7 +34,9 @@ class PODClassification:
         if info_dict.get("physical_paper_damage"):
             current_info["podCategory"] = PODCategory.MANUAL_CHECK_REQUIRED.value
             current_info["categoryReason"] = "Physical POD Damage " + (info_dict.get("remarks_text") or "")
-            current_info["categoryScore"] += 10
+            current_info["categoryScore"] = self._calculate_score({
+                "physical_damage": info_dict.get("physical_damage_score", 1.0)
+            })
             return current_info
 
         # Priority 2: Damage and Shortage
@@ -46,21 +47,28 @@ class PODClassification:
         ):
             current_info["podCategory"] = PODCategory.ISSUE_POD_DAMAGED_AND_SHORT.value
             current_info["categoryReason"] = "POD Damage and Shortage " + (info_dict.get("remarks_text") or "")
-            current_info["categoryScore"] += 8
+            current_info["categoryScore"] = self._calculate_score({
+                "damage": info_dict.get("business_damage_score", 1.0),
+                "shortage": info_dict.get("business_shortage_score", 1.0),
+            })
             return current_info
 
         # Priority 3: Business Damage
         if info_dict.get("business_damage") and info_dict.get("remark") == "DAMAGE":
             current_info["podCategory"] = PODCategory.ISSUE_POD_DAMAGED.value
             current_info["categoryReason"] = "Business POD Damage " + (info_dict.get("remarks_text") or "")
-            current_info["categoryScore"] += 5
+            current_info["categoryScore"] = self._calculate_score({
+                "damage": info_dict.get("business_damage_score", 1.0)
+            })
             return current_info
 
         # Priority 4: Shortage
         if info_dict.get("business_shortage") and info_dict.get("remark") == "SHORT":
             current_info["podCategory"] = PODCategory.ISSUE_POD_SHORT.value
             current_info["categoryReason"] = "POD Shortage " + (info_dict.get("remarks_text") or "")
-            current_info["categoryScore"] += 3
+            current_info["categoryScore"] = self._calculate_score({
+                "shortage": info_dict.get("business_shortage_score", 1.0)
+            })
             return current_info
 
         # Priority 5: Clean POD without any issues with signature and stamp
@@ -73,21 +81,29 @@ class PODClassification:
         ):
             current_info["podCategory"] = PODCategory.CLEAN_POD_SEAL_AND_SIGNATURE.value
             current_info["categoryReason"] = "Clean POD without any issues with signature and stamp"
-            current_info["categoryScore"] += 1
+            current_info["categoryScore"] = self._calculate_score({
+                "signature": info_dict.get("signature_presence_score", 1.0),
+                "stamp": info_dict.get("stamp_presence_score", 1.0),
+                "handwriting": info_dict.get("handwriting_presence_score", 1.0),
+            })
             return current_info
 
         # Priority 6: Clean POD with only Stamp
         if info_dict.get("has_stamp") and info_dict.get("remark") is None and not info_dict.get("has_signature"):
             current_info["podCategory"] = PODCategory.CLEAN_POD_ONLY_SEAL.value
             current_info["categoryReason"] = "Clean POD with stamp only"
-            current_info["categoryScore"] += 1
+            current_info["categoryScore"] = self._calculate_score({
+                "stamp": info_dict.get("stamp_presence_score", 1.0)
+            })
             return current_info
 
         # Priority 7: Clean POD with only Signature
         if info_dict.get("has_signature") and info_dict.get("remark") is None and not info_dict.get("has_stamp"):
             current_info["podCategory"] = PODCategory.CLEAN_POD_ONLY_SIGNATURE.value
             current_info["categoryReason"] = "Clean POD with signature only"
-            current_info["categoryScore"] += 1
+            current_info["categoryScore"] = self._calculate_score({
+                "signature": info_dict.get("signature_presence_score", 1.0)
+            })
             return current_info
 
         # Priority 8: Clean POD without stamp or signature and no handwritten remarks
@@ -99,8 +115,20 @@ class PODClassification:
         ):
             current_info["podCategory"] = PODCategory.NO_SIGNATURE_NO_STAMP.value
             current_info["categoryReason"] = "POD without stamp or signature"
-            current_info["categoryScore"] += 1
+            sig_score = float(info_dict.get("signature_presence_score", 0.0) or 0.0)
+            stamp_score = float(info_dict.get("stamp_presence_score", 0.0) or 0.0)
+            current_info["categoryScore"] = self._calculate_score({
+                "absence_confidence": 1.0 - max(sig_score, stamp_score)
+            })
             return current_info
 
         return current_info
 
+    @staticmethod
+    def _calculate_score(scores: dict[str, float]) -> float:
+        """Calculate normalized category score between 0.0 and 1.0."""
+        valid_scores = [float(v) for v in scores.values() if v is not None]
+        if not valid_scores:
+            return 0.0
+        avg_score = sum(valid_scores) / len(valid_scores)
+        return round(max(0.0, min(1.0, avg_score)), 4)
